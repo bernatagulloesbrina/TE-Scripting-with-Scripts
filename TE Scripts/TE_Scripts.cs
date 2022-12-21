@@ -12,6 +12,52 @@ namespace TE_Scripting
     public class TE_Scripts
     {
 
+        void createLabelCalcGroup()
+        {
+            String calcGroupName = "Labels 2";
+
+            CalculationGroupTable cg = Model.AddCalculationGroup(name: calcGroupName);
+
+            Table t = SelectTable(Model.Tables, label: "Select table of axis field");
+            if (t == null) return;
+
+            Column c = SelectColumn(table: t, label: "Select axis field");
+            if (c == null) return;
+
+            String calcItemName = "Only Top Value by " + c.Name;
+
+            String calcItemExpression =
+                String.Format(
+                    @"VAR maxValue =
+                        CALCULATE(
+                            MAXX(
+                                VALUES(
+                                    {0}
+                                ),
+                                SELECTEDMEASURE( )
+                            ),
+                            ALLSELECTED( {1} )
+                        )
+                    VAR currentValue =
+                        SELECTEDMEASURE( )
+                    VAR fString =
+                        IF(
+                            maxValue = currentValue,
+                            SELECTEDMEASUREFORMATSTRING(
+
+                            ),
+                            "";;;""
+                        )
+                    RETURN
+                        fString", c.DaxObjectFullName, t.DaxObjectFullName);
+
+            CalculationItem ci = cg.AddCalculationItem(name: calcItemName, expression: calcItemExpression);
+            ci.FormatDax();
+
+
+        }
+
+
         static readonly Model Model;
         static readonly TabularEditor.UI.UITreeSelection Selected;
 
@@ -40,51 +86,6 @@ namespace TE_Scripting
             ScriptHelper.Output(value: value, lineNumber: lineNumber);
         }
 
-        void createLabelCalcGroup()
-        {
-            String calcGroupName = "Labels 2";
-
-            CalculationGroupTable cg = Model.AddCalculationGroup(name: calcGroupName);
-
-            Table t = SelectTable(Model.Tables, label:"Select table of axis field");
-            if (t == null) return;
-
-            Column c = SelectColumn(table:t,label:"Select axis field");
-            if(c == null) return;
-
-            String calcItemName = "Only Top Value";
-
-            String calcItemExpression = 
-                String.Format(
-                    @"VAR maxValue =
-                        CALCULATE(
-                            MAXX(
-                                VALUES(
-                                    {0}
-                                ),
-                                SELECTEDMEASURE( )
-                            ),
-                            ALLSELECTED( {1} )
-                        )
-                    VAR currentValue =
-                        SELECTEDMEASURE( )
-                    VAR fString =
-                        IF(
-                            maxValue = currentValue,
-                            SELECTEDMEASUREFORMATSTRING(
-
-                            ),
-                            "";;;""
-                        )
-                    RETURN
-                        fString",c.DaxObjectFullName,t.DaxObjectFullName);
-
-            CalculationItem ci = cg.AddCalculationItem(name: calcItemName, expression: calcItemExpression);
-            ci.FormatDax();
-
-
-
-        }
 
     }
 }
