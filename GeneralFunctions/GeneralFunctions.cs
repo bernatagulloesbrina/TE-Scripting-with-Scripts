@@ -9,11 +9,36 @@ using TabularEditor.Scripting;
 
 namespace GeneralFunctions
 {
+
+    //copy from the following line up to ****** and remove the // before the closing bracket
     public static class Fx
     {
-        static readonly Model Model;
-        static readonly TabularEditor.UI.UITreeSelection Selected;
+        
+        //in TE2 (at least up to 2.17.2) any method that accesses or modifies the model needs a reference to the model 
+        //the following is an example method where you can build extra logic
+        public static Table CreateCalcTable(Model model, string tableName, string tableExpression) 
+        { 
+            return model.AddCalculatedTable(name:tableName,expression:tableExpression);
+        }
 
+        //add other methods always as "public static" followed by the data type they will return or void if they do not return anything.
+
+
+
+        //}
+
+        //******************
+        //do not copy from this line below, and remove the // before the closing bracket above to close the class definition
+
+
+        //Model and Selected cannot be accessed directly. Always pass a reference to the requited objects. 
+        //static readonly Model Model;
+        //static readonly TabularEditor.UI.UITreeSelection Selected;
+
+
+        //These functions replicate the ScriptHelper functions so that they can be
+        //used inside the script without the ScriptHelper prefix which cannot be used inside tabular editor
+        //the list is not complete and does not include all overloads, complete as necessary. 
         public static void Error(string message, int lineNumber = -1, bool suppressHeader = false)
         {
             ScriptHelper.Error(message: message, lineNumber: lineNumber, suppressHeader: suppressHeader);
@@ -33,78 +58,5 @@ namespace GeneralFunctions
         {
             ScriptHelper.Output(value: value, lineNumber: lineNumber);
         }
-
-        //public static class Fx { 
-
-        public static Table CreateCalcTable(
-        string tableName = "Measures",
-        string tableExpression = "FILTER({BLANK()},FALSE)")
-        {
-            if (Model.Tables.Any(t => t.Name == tableName))
-            {
-                Error("There is already a table called " + tableName + ".");
-                return null;
-            };
-
-            Table newTable =
-                Model.AddCalculatedTable(
-                    name: tableName,
-                    expression: tableExpression);
-
-            return newTable;
-
-        }
-
-
-
-        //Func<Table, bool> mTables = (t) => !model.Relationships.Any(r => r.ToTable == t || r.FromTable == t)
-        //    //the table has no visible columns
-        //    && t.Columns.All(c => !c.IsVisible);
-
-
-        public static Table GetMeasureTable(string tableName = "Measures", bool createIfNecessary = true)
-        {
-
-
-            var MeasureTables = Model.Tables.Where
-                    (t =>
-                        //no relationships start or end on the table
-                        !Model.Relationships.Any(r => r.ToTable == t || r.FromTable == t)
-                        //the table has no visible columns
-                        && t.Columns.All(c => !c.IsVisible)
-                    );
-            if (MeasureTables.Count() == 0)
-            {
-                if (createIfNecessary)
-                {
-                    //does not exist, new one is created
-                    Table newMeasureTable =
-                        Model.AddCalculatedTable(
-                            name: tableName,
-                            expression: "FILTER({BLANK()},FALSE)"
-                        );
-                    return newMeasureTable;
-
-                }
-                else
-                {
-                    //does not exist, will not create
-                    return null;
-                };
-            }
-            else if (MeasureTables.Count() == 1)
-            {
-                Table singleExistingTable = MeasureTables.First();
-                return singleExistingTable;
-            }
-            else
-            {
-                Table chosenTable = ScriptHelper.SelectTable(MeasureTables, MeasureTables.First(), "Select measure table to use");
-            }
-
-            return null;
-        }
-
-
     }
 }

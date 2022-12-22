@@ -11,6 +11,7 @@ Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
+		Description = Solution to write tabular editor scripts and a custom class to reuse code
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{AA7FDC47-DE67-4D70-B521-08C1CAACDD51}.Debug|Any CPU.ActiveCfg = Debug|Any CPU

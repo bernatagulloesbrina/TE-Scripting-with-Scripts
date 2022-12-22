@@ -12,55 +12,21 @@ namespace TE_Scripting
     public class TE_Scripts
     {
 
-        void createLabelCalcGroup()
+        void myScript()
         {
-            String calcGroupName = "Labels 2";
-
-            CalculationGroupTable cg = Model.AddCalculationGroup(name: calcGroupName);
-
-            Table t = SelectTable(Model.Tables, label: "Select table of axis field");
-            if (t == null) return;
-
-            Column c = SelectColumn(table: t, label: "Select axis field");
-            if (c == null) return;
-
-            String calcItemName = "Only Top Value by " + c.Name;
-
-            String calcItemExpression =
-                String.Format(
-                    @"VAR maxValue =
-                        CALCULATE(
-                            MAXX(
-                                VALUES(
-                                    {0}
-                                ),
-                                SELECTEDMEASURE( )
-                            ),
-                            ALLSELECTED( {1} )
-                        )
-                    VAR currentValue =
-                        SELECTEDMEASURE( )
-                    VAR fString =
-                        IF(
-                            maxValue = currentValue,
-                            SELECTEDMEASUREFORMATSTRING(
-
-                            ),
-                            "";;;""
-                        )
-                    RETURN
-                        fString", c.DaxObjectFullName, t.DaxObjectFullName);
-
-            CalculationItem ci = cg.AddCalculationItem(name: calcItemName, expression: calcItemExpression);
-            ci.FormatDax();
+           //your code goes here, only code should be copied to TabularEditor, along with any necessary references. 
 
 
         }
 
-
+        //these two are necessary to have the Model and Selected objects available in the script
         static readonly Model Model;
         static readonly TabularEditor.UI.UITreeSelection Selected;
 
+
+        //These functions replicate the ScriptHelper functions so that they can be
+        //used inside the script without the ScriptHelper prefix which cannot be used inside tabular editor
+        //the list is not complete and does not include all overloads, complete as necessary. 
         public static void Error(string message, int lineNumber = -1, bool suppressHeader = false)
         {
             ScriptHelper.Error(message: message, lineNumber: lineNumber, suppressHeader: suppressHeader);
