@@ -28,6 +28,7 @@ namespace TE_Scripting
             // '2021-09-23 / B.Agullo / added code to prompt for parameters (code credit to Daniel Otykier) 
             // '2021-09-27 / B.Agullo / added code for general name 
             // '2022-10-11 / B.Agullo / added MMT and MWT calc item groups
+            // '2023-01-24 / B.Agullo / added Date Range Measure and completed dynamic label for existing items
             //
             // by Bernat Agulló
             // twitter: @AgulloBernat
@@ -358,6 +359,12 @@ namespace TE_Scripting
             var labelAsFormatStringMeasure = calcGroup.AddMeasure(labelAsFormatStringMeasureName, "0");
             labelAsFormatStringMeasure.Description = "Use this measure to show the year evaluated in charts";
 
+            Measure dateRangeMeasure = calcGroup.AddMeasure("Date Range", expression: @"FORMAT( MIN( 'Date'[Date] ), ""d-MMM-yy"", ""en-US"" ) & "" to ""
+                    & FORMAT( MAX( 'Date'[Date] ), ""d-MMM-yy"", ""en-US"" )");
+
+            dateRangeMeasure.Description = "This measure is used to display the dynamic label of Moving total calc items. Do not delete.";
+            
+
             //by default the calc group has a column called Name. If this column is still called Name change this in line with specfied variable
             if (calcGroup.Columns.Contains("Name"))
             {
@@ -596,7 +603,21 @@ namespace TE_Scripting
              "        )";
 
 
-            string MATlabel = "\"MAT\"";
+            string MATlabel =
+                "        /*TAM*/" +
+             "        IF (" +
+                "    [" + ShowValueForDatesMeasureName + "], " +
+             "            CALCULATE (" +
+             "                " + dateRangeMeasure.DaxObjectFullName + "," +
+             "                DATESINPERIOD (" +
+             "                    " + dateColumnWithTable + " ," +
+             "                    MAX ( " + dateColumnWithTable + "  )," +
+             "                    -1," +
+             "                    YEAR" +
+             "                )" +
+             "                " +
+             "            )" +
+             "        )";
 
             string MATminus1 =
              "        /*TAM*/" +
@@ -613,7 +634,21 @@ namespace TE_Scripting
              "            )" +
              "        )";
 
-            string MATminus1label = "\"MAT-1\"";
+            string MATminus1label = 
+                "/*MAT-1*/" +
+             "        IF (" +
+             "            [" + ShowValueForDatesMeasureName + "], " +
+             "            CALCULATE (" +
+             "                " + dateRangeMeasure.DaxObjectFullName + "," +
+             "                DATESINPERIOD (" +
+             "                    " + dateColumnWithTable + "," +
+             "                    LASTDATE( DATEADD( " + dateColumnWithTable + ", - 1, YEAR ) )," +
+             "                    -1," +
+             "                    YEAR" +
+             "                )" +
+             "            )" +
+             "        )";
+            ;
 
             string MATvsMATminus1 =
              "        /*MAT vs MAT-1*/\r\n" +
@@ -622,7 +657,12 @@ namespace TE_Scripting
              "        RETURN \r\n" +
              "            IF( ISBLANK( MAT ) || ISBLANK( MAT_1 ), BLANK(), MAT - MAT_1 )";
 
-            string MATvsMATminus1label = "\"MAT vs MAT-1\"";
+            string MATvsMATminus1label = "/*MAT vs MAT-1*/" +
+                
+             "        VAR MAT = " + MATlabel + "\r\n" +
+             "        VAR MAT_1 =" + MATminus1label + "\r\n" +
+             "        RETURN \r\n" +
+             "            IF( ISBLANK( MAT ) || ISBLANK( MAT_1 ), BLANK(), MAT & \" vs \" & MAT_1 )";
 
             string MATvsMATminus1pct =
              "        /*MAT vs MAT-1(%)*/" +
@@ -635,7 +675,11 @@ namespace TE_Scripting
              "                DIVIDE( MAT - MAT_1, MAT_1 )" +
              "            )";
 
-            string MATvsMATminus1pctlabel = "\"MAT vs MAT-1 (%)\"";
+            string MATvsMATminus1pctlabel = "/*MAT vs MAT-1 (%)*/" +
+                             "        VAR MAT = " + MATlabel + "\r\n" +
+             "        VAR MAT_1 =" + MATminus1label + "\r\n" +
+             "        RETURN \r\n" +
+             "            IF( ISBLANK( MAT ) || ISBLANK( MAT_1 ), BLANK(), MAT & \" vs \" & MAT_1 & \" (%)\" )"; 
 
             string MMT = String.Format(
                     @"/*MMT*/
@@ -644,7 +688,12 @@ namespace TE_Scripting
             CALCULATE( SELECTEDMEASURE( ), DATESINPERIOD( {1}, MAX( {1} ), -1, MONTH ) )
         )", ShowValueForDatesMeasureName, dateColumnWithTable);
 
-            string MMTlabel = "\"MMT\"";
+            string MMTlabel = String.Format(
+                    @"/*MMT*/
+        IF(
+            [{0}],
+            CALCULATE( {2}, DATESINPERIOD( {1}, MAX( {1} ), -1, MONTH ) )
+        )", ShowValueForDatesMeasureName, dateColumnWithTable, dateRangeMeasure.DaxObjectFullName);
 
             string MMTminus1 = String.Format(
                     @"/*MMT*/
@@ -653,7 +702,13 @@ namespace TE_Scripting
             CALCULATE( SELECTEDMEASURE( ), DATESINPERIOD( {1}, LASTDATE( DATEADD( {1}, -1, MONTH ) ), -1, MONTH ) )
         )", ShowValueForDatesMeasureName, dateColumnWithTable);
 
-            string MMTminus1label = "\"MMT-1\"";
+            string MMTminus1label = "/*MMT-1*/" +
+                String.Format(
+                    @"/*MMT*/
+        IF(
+            [{0}],
+            CALCULATE( {2}, DATESINPERIOD( {1}, LASTDATE( DATEADD( {1}, -1, MONTH ) ), -1, MONTH ) )
+        )", ShowValueForDatesMeasureName, dateColumnWithTable, dateRangeMeasure.DaxObjectFullName);
 
             string MMTvsMMTminus1 =
              "        /*MMT vs MMT-1*/\r\n" +
@@ -662,7 +717,12 @@ namespace TE_Scripting
              "        RETURN \r\n" +
              "            IF( ISBLANK( MMT ) || ISBLANK( MMT_1 ), BLANK(), MMT - MMT_1 )";
 
-            string MMTvsMMTminus1label = "\"MMT vs MMT-1\"";
+            string MMTvsMMTminus1label =
+                "        /*MMT vs MMT-1*/\r\n" +
+             "        VAR MMT = " + MMTlabel + "\r\n" +
+             "        VAR MMT_1 =" + MMTminus1label + "\r\n" +
+             "        RETURN \r\n" +
+             "            IF( ISBLANK( MMT ) || ISBLANK( MMT_1 ), BLANK(), MMT & \" vs \" & MMT_1 )"; 
 
             string MMTvsMMTminus1pct =
              "        /*MMT vs MMT-1(%)*/" +
@@ -675,7 +735,12 @@ namespace TE_Scripting
              "                DIVIDE( MMT - MMT_1, MMT_1 )" +
              "            )";
 
-            string MMTvsMMTminus1pctlabel = "\"MMT vs MMT-1 (%)\"";
+            string MMTvsMMTminus1pctlabel =
+                "        /*MMT vs MMT-1(%)*/" +
+             "        VAR MMT = " + MMTlabel + "\r\n" +
+             "        VAR MMT_1 =" + MMTminus1label + "\r\n" +
+             "        RETURN" +
+             "            IF( ISBLANK( MMT ) || ISBLANK( MMT_1 ), BLANK(), MMT & \" vs \" & MMT_1  & \" (%)\")";
 
 
 
@@ -686,7 +751,14 @@ namespace TE_Scripting
             CALCULATE( SELECTEDMEASURE( ), DATESINPERIOD( {1}, MAX( {1} ), -7, DAY ) )
         )", ShowValueForDatesMeasureName, dateColumnWithTable);
 
-            string MWTlabel = "\"MWT\"";
+            string MWTlabel = "/*MWT*/" +
+                
+                String.Format(
+                    @"/*MWT*/
+        IF(
+            [{0}],
+            CALCULATE( {2}, DATESINPERIOD( {1}, MAX( {1} ), -7, DAY ) )
+        )", ShowValueForDatesMeasureName, dateColumnWithTable,dateRangeMeasure.DaxObjectFullName); ;
 
             string MWTminus1 = String.Format(
                     @"/*MWT*/
@@ -695,7 +767,13 @@ namespace TE_Scripting
             CALCULATE( SELECTEDMEASURE( ), DATESINPERIOD( {1}, LASTDATE( DATEADD( {1}, -7, DAY ) ), -7, DAY ) )
         )", ShowValueForDatesMeasureName, dateColumnWithTable);
 
-            string MWTminus1label = "\"MWT-1\"";
+            string MWTminus1label = "/*MWT-1*/" +
+                String.Format(
+                    @"/*MWT*/
+        IF(
+            [{0}],
+            CALCULATE( {2}, DATESINPERIOD( {1}, LASTDATE( DATEADD( {1}, -7, DAY ) ), -7, DAY ) )
+        )", ShowValueForDatesMeasureName, dateColumnWithTable, dateRangeMeasure.DaxObjectFullName);
 
             string MWTvsMWTminus1 =
              "        /*MWT vs MWT-1*/\r\n" +
@@ -704,7 +782,12 @@ namespace TE_Scripting
              "        RETURN \r\n" +
              "            IF( ISBLANK( MWT ) || ISBLANK( MWT_1 ), BLANK(), MWT - MWT_1 )";
 
-            string MWTvsMWTminus1label = "\"MWT vs MWT-1\"";
+            string MWTvsMWTminus1label = 
+                "        /*MWT vs MWT-1*/\r\n" +
+             "        VAR MWT = " + MWTlabel + "\r\n" +
+             "        VAR MWT_1 =" + MWTminus1label + "\r\n" +
+             "        RETURN \r\n" +
+             "            IF( ISBLANK( MWT ) || ISBLANK( MWT_1 ), BLANK(), MWT & \" vs \" & MWT_1 )"; 
 
             string MWTvsMWTminus1pct =
              "        /*MWT vs MWT-1(%)*/" +
@@ -717,7 +800,12 @@ namespace TE_Scripting
              "                DIVIDE( MWT - MWT_1, MWT_1 )" +
              "            )";
 
-            string MWTvsMWTminus1pctlabel = "\"MWT vs MWT-1 (%)\"";
+            string MWTvsMWTminus1pctlabel = 
+                "/*MWT vs MWT-1 (%)*/" +
+             "        VAR MWT = " + MWTlabel + "\r\n" +
+             "        VAR MWT_1 =" + MWTminus1label + "\r\n" +
+             "        RETURN \r\n" +
+             "            IF( ISBLANK( MWT ) || ISBLANK( MWT_1 ), BLANK(), MWT & \" vs \" & MWT_1 & \" (%)\")";
 
 
 
@@ -833,7 +921,8 @@ namespace TE_Scripting
             string calcItemSortOrderName = "Sort Order";
             string calcItemSortOrderValue = String.Empty;
 
-            string filterValueAnnotationName = String.Empty; 
+            string filterValueAnnotationName = String.Empty;
+            string dynamicNameAnnotationName = "Dynamic Name";
 
 
             string scriptAnnotationName = "Script";
@@ -903,14 +992,28 @@ namespace TE_Scripting
 
             String filterQuery = String.Format("EVALUATE DISTINCT({0})", filterColumn.DaxObjectFullName);
 
+            List<String> filterValues = new List<String>();
 
+            using (var filterReader = Model.Database.ExecuteReader(filterQuery))
+            {
+
+                while (filterReader.Read())
+                {
+
+                    filterValues.Add(filterReader.GetValue(0).ToString());
+                }
+            }
+            
             string name = String.Empty;
             if (generateFieldParameter)
             {
                 name = Interaction.InputBox("Provide a name for the field parameter", "Field Parameter", regularCg.Name + " Measures", 740, 400);
                 if (name == "") { Error("Execution Aborted"); return; };
             };
-                        
+
+            Measure dynamicNameMeasure = SelectMeasure(label: "Select measure for dynamic name, cancel if none");
+
+
             /*iterates through each selected measure*/
             foreach (Measure m in Selected.Measures)
             {
@@ -927,87 +1030,162 @@ namespace TE_Scripting
                 /*iterates thorough all calculation items of the selected calc group*/
                 foreach (CalculationItem calcItem in regularCg.CalculationItems)
                 {
-                    using (var filterReader = Model.Database.ExecuteReader(filterQuery))
-                    {
 
-                        while (filterReader.Read())
+                    string measureNamePrefix = string.Concat(Enumerable.Repeat("\u8203", calcItem.Ordinal));
+
+                    foreach (string filterValue in filterValues)
+                    {
+                        
+                        
+                        
+                        /*measure name*/
+                        string measureName = measureName = m.Name + " " + calcItem.Name + " " + filterValue;
+
+                        string dynamicMeasureName = String.Empty;  
+
+                        if (dynamicNameMeasure == null)
+                        {
+                            dynamicMeasureName = measureName;
+                        }
+                        else
                         {
 
+                            string measureNameQuery = String.Empty;
 
-                            string filterValue = filterReader.GetValue(0).ToString();
-
-
-                            /*measure name*/
-                            string measureName = m.Name + " " + calcItem.Name + " " + filterValue;
-
-                            //only if the measure is not yet there (think of reruns)
-                            if (!Model.AllMeasures.Any(x => x.Name == measureName))
+                            if (filterColumn.DataType == DataType.String)
                             {
 
-                                /*prepares a query to calculate the resulting format when applying the calculation item on the measure*/
-                                string query = string.Format(
-                                    "EVALUATE {{CALCULATE({0},{1},{2})}}",
-                                    m.DaxObjectFullName,
-                                    string.Format(
-                                        "{0}=\"{1}\"",
+                                measureNameQuery =
+                                    String.Format("EVALUATE {{CALCULATE({0},{1}=\"{2}\",{3}=\"{4}\") & \"\"}}", 
+                                        dynamicNameMeasure.DaxObjectFullName, 
+                                        filterColumn.DaxObjectFullName, 
+                                        filterValue,
                                         regularCg.Columns[0].DaxObjectFullName,
-                                        calcItem.Name),
-                                    string.Format(
-                                        "{0}=\"{1}\"",
-                                        auxCg.Columns[0].DaxObjectFullName,
-                                        auxCalcItemName)
-                                );
+                                        calcItem.Name);
+                            }
+                            else
+                            {
+                                measureNameQuery =
+                                    String.Format("EVALUATE {{CALCULATE({0},{1}={2},{3}=\"{4}\") & \"\"}}",
+                                        dynamicNameMeasure.DaxObjectFullName,
+                                        filterColumn.DaxObjectFullName,
+                                        filterValue,
+                                        regularCg.Columns[0].DaxObjectFullName,
+                                        calcItem.Name);
+                            }
 
-                                /*executes the query*/
-                                using (var reader = Model.Database.ExecuteReader(query))
+
+
+
+                            using (var reader = Model.Database.ExecuteReader(measureNameQuery))
+                            {
+                                while (reader.Read())
                                 {
-                                    // resultset should contain just one row, with the format string
-                                    while (reader.Read())
+                                    dynamicMeasureName = reader.GetString(0).ToString();
+
+                                }
+                            }
+
+                            dynamicMeasureName = measureNamePrefix + dynamicMeasureName;
+                        }
+
+                        
+
+                        //only if the measure is not yet there (think of reruns)
+                        if (!Model.AllMeasures.Any(x => x.Name == measureName))
+                        {
+
+                            /*prepares a query to calculate the resulting format when applying the calculation item on the measure*/
+                            string query = string.Format(
+                                "EVALUATE {{CALCULATE({0},{1},{2})}}",
+                                m.DaxObjectFullName,
+                                string.Format(
+                                    "{0}=\"{1}\"",
+                                    regularCg.Columns[0].DaxObjectFullName,
+                                    calcItem.Name),
+                                string.Format(
+                                    "{0}=\"{1}\"",
+                                    auxCg.Columns[0].DaxObjectFullName,
+                                    auxCalcItemName)
+                            );
+
+                            /*executes the query*/
+                            using (var reader = Model.Database.ExecuteReader(query))
+                            {
+                                // resultset should contain just one row, with the format string
+                                while (reader.Read())
+                                {
+
+
+                                    /*retrive the formatstring from the query*/
+                                    string formatString = reader.GetValue(0).ToString();
+
+                                    Output(formatString);
+
+
+
+
+                                    /*build the expression of the measure*/
+                                    string measureExpression = String.Empty;
+
+                                    if(filterColumn.DataType == DataType.String)
                                     {
-
-
-                                        /*retrive the formatstring from the query*/
-                                        string formatString = reader.GetValue(0).ToString();
-
-                                        /*build the expression of the measure*/
-                                        string measureExpression = string.Format(
+                                        measureExpression = string.Format(
                                             "CALCULATE({0},{1}=\"{2}\",KEEPFILTERS({3}=\"{4}\"))",
                                             m.DaxObjectName,
                                             regularCg.Columns[0].DaxObjectFullName,
                                             calcItem.Name,
                                             filterColumn.DaxObjectFullName,
                                             filterValue
-                                            );
-
-                                       
-
-                                        /*actually build the measure*/
-                                        Measure newMeasure =
-                                            m.Table.AddMeasure(
-                                                name: measureName,
-                                                expression: measureExpression);
-
-
-                                        /*the all important format string!*/
-                                        newMeasure.FormatString = formatString;
-
-                                        /*final polish*/
-                                        newMeasure.DisplayFolder = displayFolderName;
-                                        newMeasure.FormatDax();
-
-                                        /*add annotations for the creation of the field parameter*/
-                                        newMeasure.SetAnnotation(baseMeasureAnnotationName, m.Name);
-                                        newMeasure.SetAnnotation(calcItemAnnotationName, calcItem.Name);
-                                        newMeasure.SetAnnotation(scriptAnnotationName, scriptAnnotationValue);
-                                        newMeasure.SetAnnotation(calcItemSortOrderName, calcItem.Ordinal.ToString("000"));
-                                        newMeasure.SetAnnotation(filterValueAnnotationName, filterValue);
-
+                                        );
                                     }
+                                    else
+                                    {
+                                        measureExpression = string.Format(
+                                            "CALCULATE({0},{1}=\"{2}\",KEEPFILTERS({3}={4}))",
+                                            m.DaxObjectName,
+                                            regularCg.Columns[0].DaxObjectFullName,
+                                            calcItem.Name,
+                                            filterColumn.DaxObjectFullName,
+                                            filterValue
+                                        );
+                                    }
+
+                                        
+                                        
+                                        
+
+
+
+                                    /*actually build the measure*/
+                                    Measure newMeasure =
+                                        m.Table.AddMeasure(
+                                            name: measureName,
+                                            expression: measureExpression);
+
+
+                                    /*the all important format string!*/
+                                    newMeasure.FormatString = formatString;
+
+                                    /*final polish*/
+                                    newMeasure.DisplayFolder = displayFolderName;
+                                    newMeasure.FormatDax();
+
+                                    /*add annotations for the creation of the field parameter*/
+                                    newMeasure.SetAnnotation(baseMeasureAnnotationName, m.Name);
+                                    newMeasure.SetAnnotation(calcItemAnnotationName, calcItem.Name);
+                                    newMeasure.SetAnnotation(scriptAnnotationName, scriptAnnotationValue);
+                                    newMeasure.SetAnnotation(calcItemSortOrderName, calcItem.Ordinal.ToString("000"));
+                                    newMeasure.SetAnnotation(filterValueAnnotationName, filterValue);
+                                    newMeasure.SetAnnotation(dynamicNameAnnotationName, dynamicMeasureName);
+
+
                                 }
                             }
-
                         }
                     }
+                        
+                    
                 }
             }
 
@@ -1033,11 +1211,13 @@ namespace TE_Scripting
                 .Where(x => x.GetAnnotation(scriptAnnotationName) == scriptAnnotationValue)
                 .OrderBy(x => x.GetAnnotation(baseMeasureAnnotationName) + x.GetAnnotation(calcItemSortOrderName));
 
-            var dax = "{\n    " + string.Join(",\n    ", objects.Select((c, i) => string.Format("(\"{0}\", NAMEOF('{1}'[{0}]), {2},\"{3}\",\"{4}\",\"{5}\")",
+            var dax = "{\n    " + string.Join(",\n    ", objects.Select((c, i) => string.Format("(\"{6}\", NAMEOF('{1}'[{0}]), {2},\"{3}\",\"{4}\",\"{5}\")",
                 c.Name, c.Table.Name, i,
                 Model.Tables[c.Table.Name].Measures[c.Name].GetAnnotation(baseMeasureAnnotationName),
                 Model.Tables[c.Table.Name].Measures[c.Name].GetAnnotation(calcItemAnnotationName),
-                Model.Tables[c.Table.Name].Measures[c.Name].GetAnnotation(filterValueAnnotationName)))) + "\n}";
+                Model.Tables[c.Table.Name].Measures[c.Name].GetAnnotation(filterValueAnnotationName),
+                Model.Tables[c.Table.Name].Measures[c.Name].GetAnnotation(dynamicNameAnnotationName)
+                ))) + "\n}";
 
             // Add the calculated table to the model:
             var table = Model.AddCalculatedTable(name, dax);
@@ -1096,6 +1276,17 @@ namespace TE_Scripting
         {
             return ScriptHelper.SelectTable(preselect: preselect, label: label);
         }
+
+        public static Measure SelectMeasure(Measure preselect = null, string label = "Select Measure")
+        {
+            return ScriptHelper.SelectMeasure(preselect:preselect,label:label);
+        }
+
+        public static Measure SelectMeasure(IEnumerable<Measure> measures, Measure preselect = null, string label = "Select Measure")
+        {
+            return ScriptHelper.SelectMeasure(measures:measures, preselect: preselect, label: label);
+        }
+
 
         public static Column SelectColumn(Table table, Column preselect = null, string label = "Select Column")
         {
