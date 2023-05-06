@@ -9,6 +9,11 @@ using Microsoft.VisualBasic;
 using GeneralFunctions;
 using System.Windows.Forms;
 using System.Collections;
+using System.IO;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using BenchmarkDotNet.Disassemblers;
 
 namespace TE_Scripting
 {
@@ -359,12 +364,6 @@ namespace TE_Scripting
             var labelAsFormatStringMeasure = calcGroup.AddMeasure(labelAsFormatStringMeasureName, "0");
             labelAsFormatStringMeasure.Description = "Use this measure to show the year evaluated in charts";
 
-            Measure dateRangeMeasure = calcGroup.AddMeasure("Date Range", expression: @"FORMAT( MIN( 'Date'[Date] ), ""d-MMM-yy"", ""en-US"" ) & "" to ""
-                    & FORMAT( MAX( 'Date'[Date] ), ""d-MMM-yy"", ""en-US"" )");
-
-            dateRangeMeasure.Description = "This measure is used to display the dynamic label of Moving total calc items. Do not delete.";
-            
-
             //by default the calc group has a column called Name. If this column is still called Name change this in line with specfied variable
             if (calcGroup.Columns.Contains("Name"))
             {
@@ -608,7 +607,7 @@ namespace TE_Scripting
              "        IF (" +
                 "    [" + ShowValueForDatesMeasureName + "], " +
              "            CALCULATE (" +
-             "                " + dateRangeMeasure.DaxObjectFullName + "," +
+             "                \"Year ending \" & FORMAT(MAX( 'Date'[Date] ),\"d-MMM-yyyy\",\"en-US\")," +
              "                DATESINPERIOD (" +
              "                    " + dateColumnWithTable + " ," +
              "                    MAX ( " + dateColumnWithTable + "  )," +
@@ -639,7 +638,7 @@ namespace TE_Scripting
              "        IF (" +
              "            [" + ShowValueForDatesMeasureName + "], " +
              "            CALCULATE (" +
-             "                " + dateRangeMeasure.DaxObjectFullName + "," +
+             "                \"Year ending \" & FORMAT(MAX( 'Date'[Date] ),\"d-MMM-yyyy\",\"en-US\")," +
              "                DATESINPERIOD (" +
              "                    " + dateColumnWithTable + "," +
              "                    LASTDATE( DATEADD( " + dateColumnWithTable + ", - 1, YEAR ) )," +
@@ -693,7 +692,7 @@ namespace TE_Scripting
         IF(
             [{0}],
             CALCULATE( {2}, DATESINPERIOD( {1}, MAX( {1} ), -1, MONTH ) )
-        )", ShowValueForDatesMeasureName, dateColumnWithTable, dateRangeMeasure.DaxObjectFullName);
+        )", ShowValueForDatesMeasureName, dateColumnWithTable, "\"Month ending \" & FORMAT(MAX( 'Date'[Date] ),\"d-MMM-yyyy\",\"en-US\")");
 
             string MMTminus1 = String.Format(
                     @"/*MMT*/
@@ -708,7 +707,7 @@ namespace TE_Scripting
         IF(
             [{0}],
             CALCULATE( {2}, DATESINPERIOD( {1}, LASTDATE( DATEADD( {1}, -1, MONTH ) ), -1, MONTH ) )
-        )", ShowValueForDatesMeasureName, dateColumnWithTable, dateRangeMeasure.DaxObjectFullName);
+        )", ShowValueForDatesMeasureName, dateColumnWithTable, "\"Month ending \" & FORMAT(MAX( 'Date'[Date] ),\"d-MMM-yyyy\",\"en-US\")");
 
             string MMTvsMMTminus1 =
              "        /*MMT vs MMT-1*/\r\n" +
@@ -758,7 +757,7 @@ namespace TE_Scripting
         IF(
             [{0}],
             CALCULATE( {2}, DATESINPERIOD( {1}, MAX( {1} ), -7, DAY ) )
-        )", ShowValueForDatesMeasureName, dateColumnWithTable,dateRangeMeasure.DaxObjectFullName); ;
+        )", ShowValueForDatesMeasureName, dateColumnWithTable, "\"Week ending \" & FORMAT(MAX( 'Date'[Date] ),\"d-MMM-yyyy\",\"en-US\")"); ;
 
             string MWTminus1 = String.Format(
                     @"/*MWT*/
@@ -773,7 +772,7 @@ namespace TE_Scripting
         IF(
             [{0}],
             CALCULATE( {2}, DATESINPERIOD( {1}, LASTDATE( DATEADD( {1}, -7, DAY ) ), -7, DAY ) )
-        )", ShowValueForDatesMeasureName, dateColumnWithTable, dateRangeMeasure.DaxObjectFullName);
+        )", ShowValueForDatesMeasureName, dateColumnWithTable, "\"Week ending \" & FORMAT(MAX( 'Date'[Date] ),\"d-MMM-yyyy\",\"en-US\")");
 
             string MWTvsMWTminus1 =
              "        /*MWT vs MWT-1*/\r\n" +
@@ -900,15 +899,14 @@ namespace TE_Scripting
             //using Microsoft.VisualBasic;
             //using System.Windows.Forms;
 
-            /* '2022-06-13 / B.Agullo / */
-            /* '2022-09-17 / B.Agullo / possibility to create a Field Parameter with a column for the base measure & calc Item
-            /* CREATE MEASURES WITH BASE MEASURES AND A CALCULATION GROUP */
+            /* '2023-01-26 / B.Agullo / creates a field parameter of measures filtered by calc group and values of a column with a name defined by a measure evaluated in the filtered value and calc item  */
 
-            /* See: https://www.esbrina-ba.com/creating-well-formatted-measures-based-on-a-calculation-group/  */
-            /* See: https://www.esbrina-ba.com/a-dynamic-legend-for-a-dynamic-measure-time-intel-chart/
+            /* DYNAMIC HEADER FIELD PARAMETER SCRIPT */
+
             /* select measures and execute, you will need to run it twice */
             /* first time to create aux calc group, second time to actually create measuree*/
             /* remove aux calc group before going to production, do the right thing */
+            
 
             string auxCgTag = "@AgulloBernat";
             string auxCgTagValue = "CG to extract format strings";
@@ -926,7 +924,7 @@ namespace TE_Scripting
 
 
             string scriptAnnotationName = "Script";
-            string scriptAnnotationValue = "Create Measures with a Calculation Group";
+            string scriptAnnotationValue = "Create Measures with a Calculation Group "+ DateTime.Now.ToString("yyyyMMddHHmmss");
 
             bool generateFieldParameter;
 
@@ -1247,6 +1245,203 @@ namespace TE_Scripting
             fieldColumn.SetExtendedProperty("ParameterMetadata", "{\"version\":3,\"kind\":2}", ExtendedPropertyType.Json);
             fieldColumn.IsHidden = true;
             orderColumn.IsHidden = true;
+        }
+
+
+        void copyMacroFromVSFile()
+        {
+            //#r "System.IO"
+            //#r "Microsoft.CodeAnalysis"
+            //using System.IO;
+            //using System.Windows.Forms;
+            //using Microsoft.CodeAnalysis;
+            //using Microsoft.CodeAnalysis.CSharp;
+            //using Microsoft.CodeAnalysis.CSharp.Syntax;
+
+            // '2023-05-06 / B.Agullo / 
+            // this macro copies the code of any of the methods defined in the TE_Scripts.cs File
+            // if the macro is using the custom class it must include de following commented directive
+            //           //using GeneralFunctions;
+            // if this line is found the macro will copy the code also from the class defined in GeneralFunctions
+            // and will combine the commented references of the class with those of the macro
+            // once the macro finishes the code is in the clipboard so it can be pasted
+            // in a new c# script tab in Tabular Editor, using CTRL+V 
+            // see further detail at -- 
+
+            //config
+            String macroFilePath = @"<HERE FULL PATH TO TE_Scripts.cs FILE>";
+            String customClassFilePath = @"<HERE FULL PATH TO GeneralFunctions.cs FILE>";
+            String codeIndent = "            ";
+            String customClassEndMark = @"//******************";
+
+            //get file structure
+            SyntaxTree tree = CSharpSyntaxTree.ParseText(File.ReadAllText(macroFilePath));
+
+            //extract method names that are not public static (just macro names) 
+            List<string> macroNames = tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()
+                                            .Where(m => m.Modifiers.ToString() != "public static")
+                                            .Select(m => m.Identifier.ToString()).ToList();
+
+            // Code that defines a local function "SelectString", which pops up a listbox allowing the user to select a 
+            // string from a number of options:
+            Func<IList<string>, string, string> SelectString = (IList<string> options, string title) =>
+            {
+                var form = new Form();
+                form.Text = title;
+                var buttonPanel = new Panel();
+                buttonPanel.Dock = DockStyle.Bottom;
+                buttonPanel.Height = 30;
+                var okButton = new Button() { DialogResult = DialogResult.OK, Text = "OK" };
+                var cancelButton = new Button() { DialogResult = DialogResult.Cancel, Text = "Cancel", Left = 80 };
+                var listbox = new ListBox();
+                listbox.Dock = DockStyle.Fill;
+                listbox.Items.AddRange(options.ToArray());
+                listbox.SelectedItem = options[0];
+
+                form.Controls.Add(listbox);
+                form.Controls.Add(buttonPanel);
+                buttonPanel.Controls.Add(okButton);
+                buttonPanel.Controls.Add(cancelButton);
+
+                var result = form.ShowDialog();
+                if (result == DialogResult.Cancel) return null;
+                return listbox.SelectedItem.ToString();
+            };
+
+            //check that macros were found
+            if (macroNames.Count == 0)
+            {
+                Error("No macros found in " + macroFilePath);
+                return;
+            }
+
+            //let the user select the name of the macro to copy
+            String select = SelectString(macroNames, "Choose a macro");
+
+            //check that indeed one macro was selected
+            if (select == null)
+            {
+                Info("You cancelled!");
+                return;
+            }
+
+            //get the method
+            MethodDeclarationSyntax method = tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()
+                .First(m => m.Identifier.ToString() == select);
+
+            //fix the code
+            String macroCode = method.Body.ToFullString().Replace("//using", "using").Replace("//#r", "#r");
+            int firstCurlyBracket = macroCode.IndexOf("{");
+            int lastCurlyBracket = macroCode.LastIndexOf("}");
+
+            macroCode = macroCode.Substring(firstCurlyBracket + 1, lastCurlyBracket - firstCurlyBracket - 1);
+
+
+            //check the custom className 
+            SyntaxTree customClassTree = CSharpSyntaxTree.ParseText(File.ReadAllText(customClassFilePath));
+
+            string customClassNamespaceName = customClassTree.GetRoot().DescendantNodes().OfType<NamespaceDeclarationSyntax>().First().Name.ToString();
+
+
+            //check if macro is using custom class
+            if (macroCode.Contains("using " + customClassNamespaceName))
+            {
+
+                ClassDeclarationSyntax customClass = customClassTree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>().First();
+
+                String customClassCode = customClass.ToString();
+                int endMarkIndex = customClassCode.IndexOf(customClassEndMark);
+
+                //crop the last part and uncomment the closing bracket
+                customClassCode = customClassCode.Substring(0, endMarkIndex - 1).Replace("//}", "}").Replace("//using", "using").Replace("//#r", "#r");
+
+
+                int hashrFirstMacroCode = Math.Max(macroCode.IndexOf("#r"), 0);
+                int hashrFirstCustomClass = customClassCode.IndexOf("#r");
+
+                if (hashrFirstCustomClass != -1)
+                {
+                    int hashrLastCustomClass = customClassCode.LastIndexOf("#r");
+                    int endOfHashrCustomClass = customClassCode.IndexOf(Environment.NewLine, hashrLastCustomClass);
+
+                    string[] hashrLines = customClassCode.Substring(hashrFirstCustomClass, endOfHashrCustomClass - hashrFirstCustomClass).Split('\n');
+
+                    foreach (String hashrLine in hashrLines)
+                    {
+                        //if #r directive not present
+                        if (!macroCode.Contains(hashrLine))
+                        {
+                            //insert in the code right before the first one
+                            macroCode = macroCode.Substring(0, Math.Max(hashrFirstMacroCode - 1, 0))
+                                + hashrLine + Environment.NewLine
+                                + macroCode.Substring(hashrFirstMacroCode);
+
+                            //update the position of the first #r
+                            hashrFirstMacroCode = Math.Max(customClassCode.IndexOf("#r"), 0);
+                        }
+                    }
+
+                    //remove #r directives from custom class 
+                    customClassCode = customClassCode.Replace(customClassCode.Substring(hashrLastCustomClass, endOfHashrCustomClass - hashrLastCustomClass), "");
+
+                }
+
+                int usingFirstMacroCode = Math.Max(macroCode.IndexOf("using"), 0);
+                int usingFirstCustomClass = customClassCode.IndexOf("using");
+
+                if (usingFirstCustomClass != -1)
+                {
+                    int usingLastCustomClass = customClassCode.LastIndexOf("using");
+                    int endOfusingCustomClass = customClassCode.IndexOf(Environment.NewLine, usingLastCustomClass);
+
+                    string[] usingLines = customClassCode.Substring(usingFirstCustomClass, endOfusingCustomClass - usingFirstCustomClass).Split('\n');
+
+                    foreach (String usingLine in usingLines)
+                    {
+
+
+                        //if #r directive not present
+                        if (!macroCode.Contains(usingLine))
+                        {
+                            //insert in the code right before the first one
+                            macroCode = macroCode.Substring(0, Math.Max(usingFirstMacroCode - 1, 0))
+                                + usingLine + Environment.NewLine
+                                + macroCode.Substring(usingFirstMacroCode);
+
+                            usingFirstMacroCode = Math.Max(macroCode.IndexOf("using"), 0);
+                        }
+                    }
+
+                    //remove using directives from custom class 
+                    customClassCode = customClassCode.Replace(customClassCode.Substring(usingFirstCustomClass, endOfusingCustomClass - usingFirstCustomClass), "");
+
+                }
+
+                //remove the using directive since it is an in-script custom class
+                macroCode = macroCode.Replace("using " + customClassNamespaceName, "");
+
+                //append custom class to macro 
+                macroCode += customClassCode;
+            }
+
+            string macroCodeClean = "";
+            string[] macroCodeLines = macroCode.Split('\n');
+            foreach (string macroCodeLine in macroCodeLines)
+            {
+                if (macroCodeLine.StartsWith(codeIndent))
+                {
+                    macroCodeClean += macroCodeLine.Substring(codeIndent.Length);
+                }
+                else
+                {
+                    macroCodeClean += macroCodeLine;
+                }
+            }
+
+            //copy the code to the clipboard
+            Clipboard.SetText(macroCodeClean);
+
+
         }
 
         //these two are necessary to have the Model and Selected objects available in the script
